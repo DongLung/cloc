@@ -3170,12 +3170,12 @@ Please use the following bibtex entry to cite cloc in a publication:
 @software{adanial_cloc,
   author       = {Albert Danial},
   title        = {cloc: v2.08},
-  month        = dec,
+  month        = jan,
   year         = 2026,
   publisher    = {Zenodo},
   version      = {v2.08},
-  doi          = {10.5281/zenodo.5760077},
-  url          = {https://doi.org/10.5281/zenodo.5760077}
+  doi          = {10.5281/zenodo.18364352},
+  url          = {https://doi.org/10.5281/zenodo.18364352}
 }
 ```
 
