@@ -982,6 +982,26 @@ foreach my $t (@Tests) {
 
     is_deeply(\%ref, \%this, $t->{'name'} . " results match");
 }
+
+# Issue #967: --fmt with --by-percent emitted "Use of uninitialized value"
+# warnings and zeroed counts because the JSON it round-trips uses
+# blank_pct/comment_pct/code_pct keys that print_format_n didn't read.
+{
+    chdir("../tests/inputs/dd");
+    my $stderr_file = "$work_dir/by_percent_fmt_stderr.txt";
+    my $stdout_file = "$work_dir/by_percent_fmt_stdout.txt";
+    my $cmd = "$cloc --fmt=4 --by-percent=cm . > $stdout_file 2> $stderr_file";
+    system($cmd);
+    chdir($work_dir);
+    my $stderr = do { local (@ARGV, $/) = $stderr_file; <> } // "";
+    my $stdout = do { local (@ARGV, $/) = $stdout_file; <> } // "";
+    unlink $stderr_file, $stdout_file unless $Verbose;
+    unlike($stderr, qr/Use of uninitialized value/,
+           "issue #967: --fmt=4 --by-percent=cm emits no uninitialized warnings");
+    like($stdout, qr/\d+\.\d+/,
+         "issue #967: --fmt=4 --by-percent=cm produces non-zero output");
+}
+
 done_testing();
 print "Finished testing $cloc\n";
 

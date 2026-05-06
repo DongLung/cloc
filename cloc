@@ -15693,6 +15693,16 @@ sub load_json {                              # {{{1
             }
         }
     }
+    # When --by-percent is in effect, the JSON emits blank_pct/comment_pct/code_pct
+    # instead of blank/comment/code. Alias them so downstream formatting works.
+    foreach my $key (keys %contents) {
+        foreach my $field (qw(blank comment code)) {
+            if (!exists $contents{$key}{$field}
+                && exists $contents{$key}{"${field}_pct"}) {
+                $contents{$key}{$field} = $contents{$key}{"${field}_pct"};
+            }
+        }
+    }
     my $url = $contents{'header'}{'cloc_url'};
     my $ver = $contents{'header'}{'cloc_version'};
     my $sec = $contents{'header'}{'elapsed_seconds'};
@@ -15712,7 +15722,8 @@ sub load_json {                              # {{{1
     my $lang_len = 0;
     foreach my $file (keys %contents) {
         my $flen = length $file;
-        my $llen = length $contents{$file}{'language'};
+        # 'language' is absent for by-language reports (the key itself is the language)
+        my $llen = length($contents{$file}{'language'} // $file);
         $file_len = $file_len > $flen ? $file_len : $flen;
         $lang_len = $lang_len > $llen ? $lang_len : $llen;
     }
