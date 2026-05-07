@@ -1007,6 +1007,8 @@ foreach my $t (@Tests) {
 # Division-by-zero regression in --by-percent=cm when any entry has
 # code+comment == 0. Run against the full tests/inputs corpus, which
 # contains tests/inputs/issues/644/UInt8.cs (code=0, comment=0, blank=1).
+# Also assert that the empty-content file shows 0.00 for all three
+# percentage columns (rather than crashing or showing NaN/uninit).
 {
     foreach my $fmt (qw(3 4)) {
         my $stderr_file = "$work_dir/dz_fmt${fmt}_stderr.txt";
@@ -1015,9 +1017,15 @@ foreach my $t (@Tests) {
                 . " > $stdout_file 2> $stderr_file";
         system($cmd);
         my $stderr = do { local (@ARGV, $/) = $stderr_file; <> } // "";
+        my $stdout = do { local (@ARGV, $/) = $stdout_file; <> } // "";
         unlink $stderr_file, $stdout_file unless $Verbose;
         unlike($stderr, qr/Illegal division by zero/,
                "no division-by-zero with --fmt=$fmt --by-percent=cm");
+        # The line for issues/644/UInt8.cs (code=0, comment=0, blank=1)
+        # must show 0.00 across all three percentage columns.
+        my ($empty_line) = grep { /issues\/644\/UInt8\.cs/ } split /\n/, $stdout;
+        like($empty_line // "", qr/\b0\.00\b.*\b0\.00\b.*\b0\.00\b/,
+             "--fmt=$fmt --by-percent=cm: empty file shows 0.00/0.00/0.00");
     }
 }
 
