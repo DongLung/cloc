@@ -986,6 +986,8 @@ foreach my $t (@Tests) {
 # Issue #967: --fmt with --by-percent emitted "Use of uninitialized value"
 # warnings and zeroed counts because the JSON it round-trips uses
 # blank_pct/comment_pct/code_pct keys that print_format_n didn't read.
+# A related defect: --by-percent=cm divided by zero whenever any entry
+# had code+comment == 0 (e.g. tests/inputs/issues/644/UInt8.cs).
 {
     chdir("../tests/inputs/dd");
     my $stderr_file = "$work_dir/by_percent_fmt_stderr.txt";
@@ -1000,6 +1002,23 @@ foreach my $t (@Tests) {
            "issue #967: --fmt=4 --by-percent=cm emits no uninitialized warnings");
     like($stdout, qr/\d+\.\d+/,
          "issue #967: --fmt=4 --by-percent=cm produces non-zero output");
+}
+
+# Division-by-zero regression in --by-percent=cm when any entry has
+# code+comment == 0. Run against the full tests/inputs corpus, which
+# contains tests/inputs/issues/644/UInt8.cs (code=0, comment=0, blank=1).
+{
+    foreach my $fmt (qw(3 4)) {
+        my $stderr_file = "$work_dir/dz_fmt${fmt}_stderr.txt";
+        my $stdout_file = "$work_dir/dz_fmt${fmt}_stdout.txt";
+        my $cmd = "$cloc --fmt=$fmt --by-percent=cm ../tests/inputs"
+                . " > $stdout_file 2> $stderr_file";
+        system($cmd);
+        my $stderr = do { local (@ARGV, $/) = $stderr_file; <> } // "";
+        unlink $stderr_file, $stdout_file unless $Verbose;
+        unlike($stderr, qr/Illegal division by zero/,
+               "no division-by-zero with --fmt=$fmt --by-percent=cm");
+    }
 }
 
 done_testing();
