@@ -1818,8 +1818,8 @@ sub produce_output {                         # {{{1
     if ($opt_fmt) {
         my $json_string = "";
         write_file(\$json_string, {}, @{$ra_Lines_Out});
-        my ($file_len, $lang_len, $header, %contents) = load_json($json_string);
-        @{$ra_Lines_Out} = print_format_n(abs($opt_fmt), $file_len, $lang_len, $header, %contents);
+        my ($file_len, $lang_len, $header, $rh_sum, %contents) = load_json($json_string);
+        @{$ra_Lines_Out} = print_format_n(abs($opt_fmt), $file_len, $lang_len, $header, $rh_sum, %contents);
     }
     if ($outfile) {
         my $adjusted_outfile = $outfile;
@@ -15719,6 +15719,10 @@ sub load_json {                              # {{{1
     $sec = $sec == 0 ? 1.0e-3 : $sec;
     my $header = sprintf "%s v %s T=%.2f s (%.1f files/s, %.1f lines/s)",
                           $url, $ver, $sec, $n_file/$sec, $n_line/$sec;
+    # Preserve the SUM block so print_format_n can render the SUM row from
+    # aggregate counts/percentages instead of accumulating per-row values
+    # (which is meaningless under --by-percent).
+    my %sum_block = exists $contents{'SUM'} ? %{$contents{'SUM'}} : ();
     delete $contents{'header'};
     delete $contents{'SUM'};
 
@@ -15736,7 +15740,7 @@ sub load_json {                              # {{{1
         $lang_len = $lang_len > $llen ? $lang_len : $llen;
     }
     print "<- load_json()\n" if $opt_v > 2;
-    return $file_len, $lang_len, $header, %contents;
+    return $file_len, $lang_len, $header, \%sum_block, %contents;
 }
 # 1}}}
 sub print_format_n {                         # {{{1
@@ -15746,8 +15750,9 @@ sub print_format_n {                         # {{{1
     # format 3 : File | Language | blank | comment | code
     # format 4 : File | blank | comment | code | total
     # format 5 : File | Language | blank | comment | code | total
-    my ($format, $file_len, $lang_len, $header, %contents) = @_;
+    my ($format, $file_len, $lang_len, $header, $rh_sum, %contents) = @_;
     print "-> print_format_n($format)\n" if $opt_v > 2;
+    $rh_sum = {} unless ref($rh_sum) eq 'HASH';
     my @prt_lines = ();
 
     # 8 = characters in "Language"
@@ -15860,6 +15865,33 @@ sub print_format_n {                         # {{{1
     }
     push @prt_lines, "$hyphens{$format}\n";
     if (scalar @file_list > 1) {
+        # Under --by-percent the per-row values are percentages, so
+        # accumulating them into the SUM row is meaningless. Replace the
+        # SUM cells with the aggregate from the JSON's preserved SUM block:
+        # in 't' mode the JSON stores 100/100/100 directly; in 'c'/'cm'/
+        # 'cb'/'cmb' it stores raw counts which we convert via the same
+        # compute_denominator() the text path uses.
+        if ($opt_by_percent and %{$rh_sum}) {
+            my $sum_blank   = $rh_sum->{'blank'}   // 0;
+            my $sum_comment = $rh_sum->{'comment'} // 0;
+            my $sum_code    = $rh_sum->{'code'}    // 0;
+            $n_files = $rh_sum->{'nFiles'} // $n_files;
+            if ($opt_by_percent eq 't') {
+                ($n_blank, $n_comment, $n_code) =
+                    ($sum_blank, $sum_comment, $sum_code);
+            } else {
+                my $DEN = compute_denominator($opt_by_percent,
+                              $sum_code, $sum_comment, $sum_blank);
+                if ($DEN > 0) {
+                    $n_blank   = sprintf("%.2f", $sum_blank   / $DEN * 100);
+                    $n_comment = sprintf("%.2f", $sum_comment / $DEN * 100);
+                    $n_code    = sprintf("%.2f", $sum_code    / $DEN * 100);
+                } else {
+                    ($n_blank, $n_comment, $n_code) = (0, 0, 0);
+                }
+            }
+            $n_total = $n_blank + $n_comment + $n_code;
+        }
         if ($opt_thousands_delimiter) {
             $n_files   = separate_thousands($n_files,   $opt_thousands_delimiter);
             $n_blank   = separate_thousands($n_blank,   $opt_thousands_delimiter);

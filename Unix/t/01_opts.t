@@ -1029,6 +1029,35 @@ foreach my $t (@Tests) {
     }
 }
 
+# SUM row regression: with --fmt and --by-percent, the SUM line must show
+# aggregate percentages (computed from total counts), not the sum of
+# per-row percentages. Compare against the non-fmt text path which
+# already produces the correct aggregate.
+{
+    my $baseline_file = "$work_dir/sum_baseline.txt";
+    system("$cloc --by-percent=cm ../tests/inputs > $baseline_file 2>/dev/null");
+    my $baseline = do { local (@ARGV, $/) = $baseline_file; <> } // "";
+    unlink $baseline_file unless $Verbose;
+    my ($baseline_sum) = grep { /^SUM:\s/ } split /\n/, $baseline;
+    my @baseline_pct = $baseline_sum =~ /(\d+\.\d{2})/g;
+
+    foreach my $fmt (qw(1 2 3 4 5)) {
+        my $out_file = "$work_dir/sum_fmt${fmt}.txt";
+        system("$cloc --fmt=$fmt --by-percent=cm ../tests/inputs"
+             . " > $out_file 2>/dev/null");
+        my $stdout = do { local (@ARGV, $/) = $out_file; <> } // "";
+        unlink $out_file unless $Verbose;
+        my ($sum_line) = grep { /^SUM\b/ } split /\n/, $stdout;
+        my @fmt_pct = $sum_line =~ /(\d+\.\d{2})/g;
+        # Each format's SUM should contain the three baseline aggregate
+        # percentages somewhere in the row. Format 2/4/5 also have a Total
+        # column appended; format 1/3 do not. We assert the first three
+        # blank/comment/code aggregates match the baseline.
+        is_deeply([@fmt_pct[0..2]], [@baseline_pct[0..2]],
+                  "--fmt=$fmt --by-percent=cm: SUM row uses aggregate, not sum-of-percentages");
+    }
+}
+
 done_testing();
 print "Finished testing $cloc\n";
 
